@@ -7,16 +7,10 @@ using namespace fetch::vm;
 namespace fetch {
 namespace vm_modules {
 
-fetch::vm::Ptr<fetch::vm::String> EtchRemoteExecutionClient::Wabble()
-{
-  return fetch::vm::Ptr<fetch::vm::String>{
-    new fetch::vm::String{vm_, "wabble"}
-  };
-}
-
 void fetch::vm_modules::EtchRemoteExecutionClient::Bind(fetch::vm::Module &module)
 {
   module.CreateClassType<EtchRemoteExecutionClient>("EtchRemoteExecutionClient")
+    .CreateConstructor(&EtchRemoteExecutionClient::Constructor)
     .CreateMemberFunction("Wabble", &EtchRemoteExecutionClient::Wabble);
 }
 

@@ -37,7 +37,12 @@ public:
   static fetch::vm::Ptr<EtchRemoteExecutionClient> Constructor(fetch::vm::VM *vm, fetch::vm::TypeId type_id);
   static void Bind(fetch::vm::Module &module);
 
-  fetch::vm::Ptr<fetch::vm::String> Wabble();
+  int Wabble()
+  {
+    if (vm_ != nullptr)
+      return 77;
+    return 76;
+  }
 
   EtchRemoteExecutionClient(EtchRemoteExecutionClient const &other) = delete;
   EtchRemoteExecutionClient &operator=(EtchRemoteExecutionClient const &other) = delete;

@@ -60,6 +60,12 @@ public:
   ExecutionResult Run(Name const &execName, Name const &stateName, std::string const &entrypoint,
                       Params params) override;
 
+  template<class TYPE>
+  void AddModule()
+  {
+    TYPE::Bind(*module_);
+  }
+
 private:
   bool HasExecutable(std::string const &name) const;
   bool HasState(std::string const &name) const;

@@ -46,6 +46,23 @@ public:
   static ExecutionResult MakeSuccess();
   static ExecutionResult MakeIntegerResult(int r);
 
+  std::string AsString()
+  {
+    std::string r("");
+
+    if (!succeeded())
+    {
+      r += "Failed:";
+      r += error_ . message();
+    }
+    else
+    {
+      r += "OK";
+    }
+
+    return r;
+  }
+
   Variant output() const
   {
     return output_;

@@ -157,13 +157,19 @@ public:
   ExecutionResult oink(const char *src)
   {
     BasicVmEngine engine;
+
+    engine.AddModule<vm_modules::EtchRemoteExecutionClient>();
+
     ExecutionResult createdProgram = engine.CreateExecutable("helloWorld", {{"etch", src}});
+    std::cout << createdProgram.AsString() << std::endl;
     EXPECT_TRUE(createdProgram.succeeded());
 
     ExecutionResult createdState = engine.CreateState("state");
     EXPECT_TRUE(createdState.succeeded());
 
     ExecutionResult result = engine.Run("helloWorld", "state", "main", ExecutionParameters{});
+    std::cout << result.AsString() << std::endl;
+    EXPECT_TRUE(result.succeeded());
     return result;
   }
 };
@@ -171,16 +177,30 @@ public:
 TEST_F(MuddleLearnerNetworkerTests, callWabble)
 {
   static char const *TEXT = R"(
-    function main()
+    function main() : Int32
       var output = Array<Int32>(2);
-      var flabble = EtchRemoteExecutionClient();
-      var sniff = flabble.Wabble();
+      var flabble : EtchRemoteExecutionClient;
+      flabble =  EtchRemoteExecutionClient();
+      var sniff : Int32;
+      sniff = flabble.Wabble();
       return sniff;
     endfunction
   )";
 
   auto foo = oink(TEXT);
-  
+
+  std::cout << foo.output().IsUndefined() << std::endl;
+  std::cout << foo.output().IsInteger()  << std::endl;
+  std::cout << foo.output().IsFloatingPoint()  << std::endl;
+  std::cout << foo.output().IsFixedPoint()  << std::endl;
+  std::cout << foo.output().IsBoolean()  << std::endl;
+  std::cout << foo.output().IsString()  << std::endl;
+  std::cout << foo.output().IsNull()  << std::endl;
+  std::cout << foo.output().IsArray()  << std::endl;
+  std::cout << foo.output().IsObject()  << std::endl;
+
+  EXPECT_EQ(foo.output().IsString(), true);
+  EXPECT_EQ(foo.output().As<std::string>(), "wabble");
 }
 
 
