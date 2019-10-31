@@ -226,4 +226,73 @@ endfunction
   CreateVMAndRunScript(script, task);
 }
 
+  TEST(ParameterSerialization, VariantTypes2)
+{
+  auto script = R"(
+function myFunction(arr: Array< Array< Float32 > >, msg: String, i: Int64, mymap : Map< String, Int64 >)
+  assert(arr.count() == 3);
+  assert(arr[0].count() == 4);
+  assert(arr[1].count() == 2);
+  assert(arr[2].count() == 3);
+
+  assert(arr[0][0] == 9.);
+  assert(arr[0][1] == 2.);
+  assert(arr[0][2] == 3.);
+  assert(arr[0][3] == 4.);
+
+  assert(arr[1][0] == 2.);
+  assert(arr[1][1] == 3.);
+
+  assert(arr[2][0] == 2.);
+  assert(arr[2][1] == 3.);
+  assert(arr[2][2] == 4.);
+
+  assert(msg == "Hello world");
+
+  assert(i == 9183i64);
+
+  assert(mymap.count() == 2);
+  assert(mymap["hello"]== 2i64);
+  assert(mymap["world"]== 29i64);
+
+endfunction
+  )";
+
+  // Creating execution task
+  ExecutionTask task;
+  task.function = "myFunction";
+
+  // Creating function arguments
+  MsgPackSerializer serializer;
+
+  // Arg1 Array< Array< Float64 > >
+  variant::Variant arr = variant::Variant::Array(3);
+  arr[0]               = variant::Variant::Array(4);
+  arr[1]               = variant::Variant::Array(2);
+  arr[2]               = variant::Variant::Array(3);
+  arr[0][0]            = static_cast<float>(9);
+  arr[0][1]            = static_cast<float>(2);
+  arr[0][2]            = static_cast<float>(3);
+  arr[0][3]            = static_cast<float>(4);
+  arr[1][0]            = static_cast<float>(2);
+  arr[1][1]            = static_cast<float>(3);
+  arr[2][0]            = static_cast<float>(2);
+  arr[2][1]            = static_cast<float>(3);
+  arr[2][2]            = static_cast<float>(4);
+
+  serializer << arr << static_cast<std::string>("Hello world") << static_cast<int64_t>(9183);
+
+  variant::Variant mymap = variant::Variant::Object();
+  mymap["hello"]         = 2;
+  mymap["world"]         = 29;
+
+  serializer << mymap;
+
+  // Storing args
+  task.parameters = serializer.data();
+
+  // Testing
+  CreateVMAndRunScript(script, task);
+}
+
 }  // namespace
