@@ -60,11 +60,25 @@ public:
   ExecutionResult Run(Name const &execName, Name const &stateName, std::string const &entrypoint,
                       Params params) override;
 
+  ExecutionResult RunDirectConversion(Name const &execName, Name const &stateName, std::string const &entrypoint,
+                      Params params);
+
   // This is a test function for developing non-primitive type passing.
   ExecutionResult RunSerialisedParameterPassing(Name const &execName, Name const &stateName,
                                                 std::string const &entrypoint, Params params);
 
 private:
+
+  class ExecutableLoader
+  {
+  public:
+    ExecutableLoader(VM &vm, Executable *exe);
+    virtual ~ExecutableLoader();
+  private:
+    VM &vm_;
+    Executable *exe_;
+  };
+
   bool HasExecutable(std::string const &name) const;
   bool HasState(std::string const &name) const;
 

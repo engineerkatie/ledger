@@ -268,6 +268,19 @@ void VM::RuntimeError(std::string const &message)
   stop_  = true;
 }
 
+Ptr<Object> VM::CreateNewObjectByType(const std::string &type_name)
+{
+  for(auto const &type : type_info_array_)
+  {
+    if (type.name == type_name)
+    {
+      std::cout << "YES!" << std::endl;
+      vm::Ptr<vm::Object> object = DefaultSerializeConstruct(type.type_id);
+    }
+  }
+  throw std::range_error(type_name);
+}
+
 void VM::Destruct(uint16_t scope_number)
 {
   // Destruct all live objects in the current frame and with scope >= scope_number

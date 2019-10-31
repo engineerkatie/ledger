@@ -351,6 +351,8 @@ public:
     return Ptr<T>{new T(this, GetTypeId<T>(), std::forward<Ts>(args)...)};
   }
 
+  Ptr<Object> CreateNewObjectByType(const std::string &type_name);
+
   void SetIOObserver(IoObserverInterface &observer)
   {
     io_observer_ = &observer;

@@ -42,19 +42,48 @@ ExecutionResult testEtchExec(const char *src, const std::string &name, variant::
   BasicVmEngine engine;
 
   ExecutionResult createdProgram = engine.CreateExecutable("helloWorld", {{"etch", src}});
-  EXPECT_TRUE(createdProgram.succeeded());
+
+  if (!createdProgram.succeeded())
+  {
+    std::cout << "COMPILE FAIL:" << createdProgram.error().message() << std::endl;
+    return createdProgram;
+  }
 
   ExecutionResult createdState = engine.CreateState("state");
-  EXPECT_TRUE(createdState.succeeded());
+  if (!createdState.succeeded())
+  {
+    std::cout << "STATE FAIL:" << createdState.error().message() << std::endl;
+    return createdState;
+  }
 
-  ExecutionResult result = engine.RunSerialisedParameterPassing("helloWorld", "state", name, {x});
-  EXPECT_TRUE(result.succeeded()) << result.error().message() << std::endl;
+  ExecutionResult result = engine.RunDirectConversion("helloWorld", "state", name, {x});
+  std::cout << "OUTPUT TYPE:" << VarConverter::describe(result.output()) << std::endl;
+  std::cout << "OUTPUT TEXT:" << result.console() << std::endl;
+  std::cout << "OUTPUT ERR :" << result.error().message() << std::endl;
+
   return result;
 }
 
-TEST(DISABLED_VarConverterTest, callWabble)
+TEST(VarConverterTest, convert_INT32)
 {
+  static char const *TEXT4 = R"(
+    function main(x : Int32) : Int32
+      return
+      x + 17
+         ;
+    endfunction
+  )";
 
+  fetch::variant::Variant input(4);
+
+  auto result = testEtchExec(TEXT4, "main", input);
+  EXPECT_TRUE(result.output().IsInteger());
+  EXPECT_EQ(result.output().As<int32_t>(), 21);
+}
+
+
+TEST(VarConverterTest, convert_4xINT32_array)
+{
   static char const *TEXT4 = R"(
     function main(x : Array<Int32>) : Int32
       return
@@ -63,17 +92,164 @@ TEST(DISABLED_VarConverterTest, callWabble)
     endfunction
   )";
 
-  auto arr4 = fetch::variant::Variant::Array(4);
+  auto input = fetch::variant::Variant::Array(4);
   for (std::size_t i = 0; i < 4; i++)
   {
-    arr4[i] = i + 1;
+    input[i] = i + 1;
   }
 
-  std::cout << "TEST4..." << std::endl;
-  auto foo4 = testEtchExec(TEXT4, "main", arr4);
-  EXPECT_TRUE(foo4.output().IsInteger());
-  EXPECT_EQ(foo4.output().As<uint32_t>(), 10);
+  auto result = testEtchExec(TEXT4, "main", input);
+  EXPECT_TRUE(result.output().IsInteger());
+  EXPECT_EQ(result.output().As<int32_t>(), 10);
+}
 
+TEST(DISABLED_VarConverterTest, convert_4xFLOAT32_array) // FAILS, returns random number.
+{
+  static char const *TEXT4 = R"(
+    function main(x : Array<Float32>) : Float32
+      return
+         x[0]+x[1]+x[2]+x[3]
+         ;
+    endfunction
+  )";
+
+  auto input = fetch::variant::Variant::Array(4);
+  for (std::size_t i = 0; i < 4; i++)
+  {
+    input[i] = float(i + 1);
+  }
+
+  auto result = testEtchExec(TEXT4, "main", input);
+  EXPECT_TRUE(result.output().IsFloatingPoint());
+  EXPECT_EQ(result.output().As<double>(), 10);
+}
+
+TEST(DISABLED_VarConverterTest, convert_4xFLOAT64_array)
+{
+  static char const *TEXT4 = R"(
+    function main(x : Array<Float64>) : Float64
+      return
+         x[0]+x[1]+x[2]+x[3]
+         ;
+    endfunction
+  )";
+
+  auto input = fetch::variant::Variant::Array(4);
+  for (std::size_t i = 0; i < 4; i++)
+  {
+    input[i] = double(i + 1);
+  }
+
+  auto result = testEtchExec(TEXT4, "main", input);
+  EXPECT_TRUE(result.output().IsFloatingPoint());
+  EXPECT_EQ(result.output().As<float>(), 10);
+}
+
+TEST(DISABLED_VarConverterTest, convert_4xFIXED64_array) // Fails, can't get result out.
+{
+  static char const *TEXT4 = R"(
+    function main(x : Array<Fixed64>) : Fixed64
+      var r : Fixed64 =
+         x[0]+x[1]+x[2]+x[3]
+         ;
+      printLn(r);
+      return r;
+    endfunction
+  )";
+
+  auto input = fetch::variant::Variant::Array(4);
+  for (std::size_t i = 0; i < 4; i++)
+  {
+    input[i] = fixed_point::fp64_t(i + 1);
+  }
+
+  auto result = testEtchExec(TEXT4, "main", input);
+  EXPECT_TRUE(result.output().IsFixedPoint());
+  auto r_fp = result.output().As<fixed_point::fp64_t>();
+  EXPECT_EQ(r_fp, 10);
+}
+
+TEST(DISABLED_VarConverterTest, convert_4xFIXED32_array) // Fails, don't know.
+{
+  static char const *TEXT4 = R"(
+    function main(x : Array<Fixed32>) : Fixed32
+      return
+         x[0]+x[1]+x[2]+x[3]
+         ;
+    endfunction
+  )";
+  std::cerr << "*A" << std::endl;
+
+  auto input = fetch::variant::Variant::Array(4);
+  std::cerr << "*B" << std::endl;
+  for (std::size_t i = 0; i < 4; i++)
+  {
+  std::cerr << "*C" << std::endl;
+    input[i] = fixed_point::fp32_t(i + 1);
+  }
+
+  std::cerr << "*D" << std::endl;
+  auto result = testEtchExec(TEXT4, "main", input);
+  EXPECT_TRUE(result.output().IsFixedPoint());
+  auto r_fp = result.output().As<fixed_point::fp32_t>();
+  EXPECT_EQ(r_fp, 10);
+}
+
+TEST(DISABLED_VarConverterTest, convert_i64)
+{
+  static char const *TEXT4 = R"(
+    function main(x : Int64) : Int64
+      return x + 17i64;
+    endfunction
+  )";
+
+  variant::Variant input = variant::Variant(7);
+  auto result = testEtchExec(TEXT4, "main", input);
+  std::cout << "OUTPUT TYPE:" << VarConverter::describe(result.output()) << std::endl;
+  EXPECT_TRUE(result.output().IsInteger());
+  EXPECT_EQ(result.output().As<long long int>(), 24);
+}
+
+TEST(DISABLED_VarConverterTest, convert_fp64)
+{
+  static char const *TEXT4 = R"(
+    function main(x : Fixed64) : Fixed64
+      return x + 17fp64;
+    endfunction
+  )";
+
+  variant::Variant input = variant::Variant(7);
+  auto result = testEtchExec(TEXT4, "main", input);
+  std::cout << "OUTPUT TYPE:" << VarConverter::describe(result.output()) << std::endl;
+  EXPECT_TRUE(result.output().IsFixedPoint());
+  EXPECT_EQ(result.output().As<fixed_point::fp64_t>(), 24);
+}
+
+TEST(DISABLED_VarConverterTest, convert_4xSTR_array) // FAILS, string output doesn't work.
+{
+  static char const *TEXT4 = R"(
+    function main(x : Array<String>) : String
+      var r : String;
+      r = x[0]+x[1]+x[2]+x[3];
+      printLn("Result");
+      printLn(r);
+      return r;
+    endfunction
+  )";
+
+  auto input = fetch::variant::Variant::Array(4);
+  for (std::size_t i = 0; i < 4; i++)
+  {
+    input[i] = std::to_string(i + 1);
+  }
+
+  auto result = testEtchExec(TEXT4, "main", input);
+  EXPECT_TRUE(result.output().IsString());
+  EXPECT_EQ(result.output().As<std::string>(), "1234");
+}
+
+TEST(DISABLED_VarConverterTest, convert_4x4xINT32_array) // Fails, needs branch with new param handling code.
+{
   static char const *TEXT44 = R"(
     function main(x : Array<Array<Int32>>) : Int32
       return
@@ -85,24 +261,23 @@ TEST(DISABLED_VarConverterTest, callWabble)
     endfunction
   )";
 
-  auto arr44 = fetch::variant::Variant::Array(4);
-  arr44[0]   = fetch::variant::Variant::Array(4);
-  arr44[1]   = fetch::variant::Variant::Array(4);
-  arr44[2]   = fetch::variant::Variant::Array(4);
-  arr44[3]   = fetch::variant::Variant::Array(4);
+  auto input = fetch::variant::Variant::Array(4);
+  input[0]   = fetch::variant::Variant::Array(4);
+  input[1]   = fetch::variant::Variant::Array(4);
+  input[2]   = fetch::variant::Variant::Array(4);
+  input[3]   = fetch::variant::Variant::Array(4);
 
   for (std::size_t i = 0; i < 4; i++)
   {
     for (std::size_t j = 0; j < 4; j++)
     {
-      arr44[i][j] = i * j;
+      input[i][j] = i * j;
     }
   }
 
-  std::cout << "TEST44..." << std::endl;
-  auto foo44 = testEtchExec(TEXT44, "main", arr44);
-  EXPECT_TRUE(foo44.output().IsInteger());
-  EXPECT_EQ(foo44.output().As<uint32_t>(), 10);
+  auto result = testEtchExec(TEXT44, "main", input);
+  EXPECT_TRUE(result.output().IsInteger());
+  EXPECT_EQ(result.output().As<uint32_t>(), 36);
 }
 
 }  // namespace dmlf

@@ -19,6 +19,7 @@
 
 #include "core/byte_array/byte_array.hpp"
 #include "variant/variant.hpp"
+#include "vm/variant.hpp"
 
 namespace fetch {
 
@@ -34,6 +35,12 @@ public:
   VarConverter()          = default;
   virtual ~VarConverter() = default;
 
+  using VMVar  = vm::Variant;
+  using VM     = vm::VM;
+  using LedVar = variant::Variant;
+
+  VMVar Convert(const LedVar &source, const std::string &format, VM &vm);
+
   bool Convert(byte_array::ByteArray &target, const variant::Variant &source,
                const std::string &format);
 
@@ -44,6 +51,7 @@ public:
 
   void Dump(byte_array::ByteArray &ba);
 
+  static std::string describe(const variant::Variant &x);
 protected:
 private:
   bool Convert(fetch::serializers::MsgPackSerializer &os, const variant::Variant &source,

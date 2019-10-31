@@ -20,11 +20,33 @@
 #include "core/serializers/array_interface.hpp"
 #include "core/serializers/container_constructor_interface.hpp"
 #include "dmlf/var_converter.hpp"
+#include "vm/vm.hpp"
+#include "vm/array.hpp"
 
 namespace fetch {
 namespace dmlf {
 
-std::string describe(const variant::Variant &x)
+using Var = variant::Variant;
+using Serializer = fetch::serializers::MsgPackSerializer;
+
+using ConverterFunction = std::function<void (Serializer &, const Var &)>;
+using ConverterFunctionInputs = std::pair<std::string, std::string>;
+using ConverterFunctions =std::map<ConverterFunctionInputs, ConverterFunction>;
+
+using AssignerFunction = std::function<VarConverter::VMVar (const VarConverter::LedVar &)>;
+using AssignerFunctionInputs = std::pair<std::string, std::string>;
+using AssignerFunctions =std::map<AssignerFunctionInputs, AssignerFunction>;
+
+class BadConv : public std::range_error
+{
+public:
+  BadConv(std::string const &format, variant::Variant const &source)
+    : std::range_error("Bad Conversion: " + VarConverter::describe(source) + " =/=> " + format)
+  {
+  }
+};
+
+std::string VarConverter::describe(const variant::Variant &x)
 {
   if (x.IsUndefined())
   {
@@ -36,7 +58,7 @@ std::string describe(const variant::Variant &x)
   }
   if (x.IsFloatingPoint())
   {
-    return "float(" + std::to_string(x.As<double>()) + ")";
+    return "float";
   }
   if (x.IsFixedPoint())
   {
@@ -44,11 +66,11 @@ std::string describe(const variant::Variant &x)
   }
   if (x.IsBoolean())
   {
-    return std::string("bool(") + (x.As<bool>() ? "true" : "false") + ")";
+    return "bool";
   }
   if (x.IsString())
   {
-    return "string(" + x.As<std::string>() + ")";
+    return "string";
   }
   if (x.IsNull())
   {
@@ -56,60 +78,157 @@ std::string describe(const variant::Variant &x)
   }
   if (x.IsArray())
   {
-    return "array[" + std::to_string(x.size()) + "]";
+    return "array";
   }
   if (x.IsObject())
   {
-    return "object{" + std::to_string(x.size()) + "}";
+    return "object";
   }
   return "unknown";
 }
 
+
+
 bool VarConverter::Convert(byte_array::ByteArray &target, const variant::Variant &source,
                            const std::string &format)
 {
-  // std::cout << "START VarConverter::Convert(" << format << ")" << std::endl;
   fetch::serializers::MsgPackSerializer ss;
-
-  if (Convert(ss, source, format))
+  std::cerr << "*CONVERT" << std::endl;
+  try
   {
-    auto data = ss.data().pointer();
-    auto size = ss.size();
-    target.Reserve(size);
-    target.Resize(size);
-    target.WriteBytes(data, size);
-    // std::cout << "start VarConverter::Convert() OK!!" << std::endl;
-    return true;
+    if (Convert(ss, source, format))
+    {
+      auto data = ss.data().pointer();
+      auto size = ss.size();
+      target.Reserve(size);
+      target.Resize(size);
+      target.WriteBytes(data, size);
+      Dump(target);
+      return true;
+    }
   }
-
-  // std::cout << "start VarConverter::Convert() **FAIL**" << std::endl;
+  catch(const BadConv &x)
+  {
+    std::cerr << "***************" << x.what() << std::endl;
+  }
   return false;
 }
 
-bool VarConverter::Convert(fetch::serializers::MsgPackSerializer &os,
-                           const variant::Variant &source, const std::string &format)
-{
-  // std::cout << "VarConverter::Convert(" << describe(source) << " => " << format << ")" <<
-  // std::endl;
-  if (format == "Int64")
-  {
-    if (!source.IsInteger())
-    {
-      std::cout << "Want int64, L::VAR is not int" << std::endl;
-      return false;
+
+ConverterFunctions CONVERTER_FUNCTIONS = {
+  {{"Int64", "integer"}, [](Serializer &os, const Var &v){ os << v.As<int64_t>(); } },
+  {{"UInt64", "integer"}, [](Serializer &os, const Var &v){ os << v.As<uint64_t>(); } },
+  {{"Int32", "integer"}, [](Serializer &os, const Var &v){ os << v.As<int32_t>(); } },
+  {{"UInt32", "integer"}, [](Serializer &os, const Var &v){ os << v.As<uint32_t>(); } },
+  {{"Int16", "integer"}, [](Serializer &os, const Var &v){ os << v.As<int16_t>(); } },
+  {{"UInt16", "integer"}, [](Serializer &os, const Var &v){ os << v.As<uint16_t>(); } },
+  {{"Int8", "integer"}, [](Serializer &os, const Var &v){ os << v.As<int8_t>(); } },
+  {{"UInt8", "integer"}, [](Serializer &os, const Var &v){ os << v.As<uint8_t>(); } },
+
+  {{"Float32", "float"}, [](Serializer &os, const Var &v){ os << v.As<float>(); } },
+  {{"Float64", "float"}, [](Serializer &os, const Var &v){ os << v.As<double>(); } },
+
+  {{"Fixed32", "fp"}, [](Serializer &os, const Var &v){
+      auto val = v.As<fixed_point::fp32_t>();
+      std::cout << "val=" << val << std::endl;
+      os << val;
     }
-    os << source.As<int64_t>();
-    return true;
+  },
+  {{"Fixed64", "fp"}, [](Serializer &os, const Var &v){
+      auto val = v.As<fixed_point::fp64_t>();
+      std::cout << "val=" << val << std::endl;
+      os << val;
+    }
+  },
+  {{"String", "string"}, [](Serializer &os, const Var &v){ os << v.As<std::string>(); } },
+
+  {{"Bool", "bool"}, [](Serializer &os, const Var &v){ os << v.As<bool>(); } },
+};
+
+AssignerFunctions ASSIGNER_FUNCTIONS = {
+  {{"Int64", "integer"}, [](const Var &v) { return VarConverter::VMVar(v.As<int64_t>(), vm::TypeIds::Int64);  } },
+  {{"Int32", "integer"}, [](const Var &v) { return VarConverter::VMVar(v.As<int32_t>(), vm::TypeIds::Int32);  } },
+ // {{"Int32", "integer"}, [](const Var &v, TypeId tid) { return VarConverter::VMVar(targ.Assign(v.As<int64_t>(), tid);  } },
+ // {{"UInt64", "integer"}, [](VarConverter::VMVar &targ, const Var &v, TypeId tid)){ targ.Assign(v.As<uint64_t>(), tid); } },
+ // {{"Int32", "integer"}, [](VarConverter::VMVar &targ, const Var &v, TypeId tid)) { targ.Assign(v.As<int32_t>() , tid);  } },
+ // {{"UInt32", "integer"}, [](VarConverter::VMVar &targ, const Var &v, TypeId tid)){ targ.Assign(v.As<uint32_t>(), tid); } },
+  /*
+  {{"Int16", "integer"}, [](VarConverter::VMVar &targ, const Var &v){ os << v.As<int16_t>(); } },
+  {{"UInt16", "integer"}, [](VarConverter::VMVar &targ, const Var &v){ os << v.As<uint16_t>(); } },
+  {{"Int8", "integer"}, [](VarConverter::VMVar &targ, const Var &v){ os << v.As<int8_t>(); } },
+  {{"UInt8", "integer"}, [](VarConverter::VMVar &targ, const Var &v){ os << v.As<uint8_t>(); } },
+
+  {{"Float32", "float"}, [](VarConverter::VMVar &targ, const Var &v){ os << v.As<float>(); } },
+  {{"Float64", "float"}, [](VarConverter::VMVar &targ, const Var &v){ os << v.As<double>(); } },
+
+  {{"Fixed32", "fp"}, [](VarConverter::VMVar &targ, const Var &v){
+      auto val = v.As<fixed_point::fp32_t>();
+      std::cout << "val=" << val << std::endl;
+      os << val;
+    }
+  },
+  {{"Fixed64", "fp"}, [](VarConverter::VMVar &targ, const Var &v){
+      auto val = v.As<fixed_point::fp64_t>();
+      std::cout << "val=" << val << std::endl;
+      os << val;
+    }
+  },
+  {{"String", "string"}, [](VarConverter::VMVar &targ, const Var &v){ os << v.As<std::string>(); } },
+
+  {{"Bool", "bool"}, [](VarConverter::VMVar &targ, const Var &v){ os << v.As<bool>(); } },*/
+};
+
+VarConverter::VMVar VarConverter::Convert(const LedVar &source, const std::string &format, VM &vm)
+{
+  AssignerFunctionInputs input{format, VarConverter::describe(source)};
+  AssignerFunctions::iterator iter = ASSIGNER_FUNCTIONS.find(input);
+  std::cout << format << " <= " << VarConverter::describe(source) << "?" << std::endl;
+  if (iter != ASSIGNER_FUNCTIONS.end())
+  {
+    VMVar r;
+    r = iter -> second(source);
+    return r;
   }
 
-  if (format == "Int32")
+  if (format.substr(0, 6) == "Array<")
   {
-    if (!source.IsInteger())
+    if (!source.IsArray())
     {
-      std::cout << "Want int32, L::VAR is not int" << std::endl;
-      return false;
+      throw BadConv(format, source);
     }
-    os << static_cast<int32_t>(source.As<int64_t>());
+    vm::Ptr<vm::Object> r = vm.CreateNewObjectByType(format);
+    auto subformat = format.substr(6, format.size() - 7);
+    vm::Object *objp = &(*r);
+    auto arr = dynamic_cast<vm::IArray*>(objp);
+
+    for (std::size_t i = 0; i < source.size(); i++)
+    {
+      //auto element = Convert(source[i], subformat, vm);
+      std::cout << arr -> elements.size() << std::endl;
+      //Append(element.As);
+    }
+
+    return VMVar(r, r->GetTypeId());
+  }
+
+  throw BadConv(format, source);
+}
+
+//bool VarConverter::Convert(fetch::serializers::MsgPackSerializer &os,
+//                           const Var &source, const std::string &format)
+//{
+//}
+
+bool VarConverter::Convert(fetch::serializers::MsgPackSerializer &os,
+                           const Var &source, const std::string &format)
+{
+
+  ConverterFunctionInputs input{format, VarConverter::describe(source)};
+  ConverterFunctions::iterator iter = CONVERTER_FUNCTIONS.find(input);
+  std::cout << format << " <= " << VarConverter::describe(source) << "?" << std::endl;
+  if (iter != CONVERTER_FUNCTIONS.end())
+  {
+    iter->second(os, source);
     return true;
   }
 
@@ -117,11 +236,13 @@ bool VarConverter::Convert(fetch::serializers::MsgPackSerializer &os,
   {
     if (!source.IsArray())
     {
-      std::cout << "Want array, L::VAR is not array" << std::endl;
-      return false;
+      throw BadConv(format, source);
     }
+    //os << format;
 
-    os << format;
+    unsigned char foo[1];
+    foo[0] = 0xdd;
+    os.WriteBytes(foo, 1);
     os << uint32_t(source.size());
 
     auto subformat = format.substr(6, format.size() - 7);
@@ -134,42 +255,7 @@ bool VarConverter::Convert(fetch::serializers::MsgPackSerializer &os,
     return r;
   }
 
-  std::cout << "Want " << format << " and can't get it." << std::endl;
-  return false;
-
-  /*
-  if (source.IsArray() )
-  {
-    using fetch::serializers::TypeCodes;
-    using fetch::serializers::MsgPackSerializer;
-    using fetch::serializers::interfaces::ArrayInterface;
-    using fetch::serializers::interfaces::ContainerConstructorInterface;
-    using Constructor = ContainerConstructorInterface<
-      MsgPackSerializer,
-      ArrayInterface<MsgPackSerializer>,
-      serializers::TypeCodes::ARRAY_CODE_FIXED,
-      serializers::TypeCodes::ARRAY_CODE16,
-      serializers::TypeCodes::ARRAY_CODE32
-    >;
-
-    os << std::string("Array<Int64x>");
-    os << uint32_t(source.size());
-
-    Constructor constructor(os);
-    //constructor(source.size());
-    bool r = true;
-    for (std::size_t i = 0; i < source.size(); i++)
-    {
-      r &= Convert(os, source[i]);
-    }
-    return r;
-  }
-  if (source.IsObject() )
-  {
-    return false;
-  }
-  return false;
-  */
+  throw BadConv(format, source);
 }
 
 void VarConverter::Dump(byte_array::ByteArray &ba)
