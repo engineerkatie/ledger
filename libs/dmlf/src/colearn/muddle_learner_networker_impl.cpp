@@ -22,6 +22,7 @@
 #include "dmlf/colearn/update_store.hpp"
 #include "muddle/rpc/client.hpp"
 #include <cmath>  // for modf
+#include "dmlf/stochastic_reception_algorithm.hpp"
 
 namespace fetch {
 namespace dmlf {
@@ -30,6 +31,21 @@ namespace colearn {
 MuddleLearnerNetworkerImpl::MuddleLearnerNetworkerImpl(MuddlePtr mud, StorePtr update_store)
 {
   Setup(std::move(mud), std::move(update_store));
+}
+
+void MuddleLearnerNetworkerImpl::SetShuffleAlgorithm(const std::shared_ptr<ShuffleAlgorithmInterface> &alg)
+{
+  ShuffleAlgorithmInterface *iface = alg.get();
+  StochasticReceptionAlgorithm *stoc = dynamic_cast<StochasticReceptionAlgorithm*>(iface);
+
+  if (stoc)
+  {
+    set_broadcast_proportion(stoc -> broadcast_proportion());
+  }
+  else
+  {
+    alg_ = alg;
+  }
 }
 
 void MuddleLearnerNetworkerImpl::Setup(MuddlePtr mud, StorePtr update_store)
@@ -62,9 +78,8 @@ void MuddleLearnerNetworkerImpl::Setup(MuddlePtr mud, StorePtr update_store)
     double                     random_factor;
 
     std::string kind;
-    auto source = std::string(fetch::byte_array::ToBase64(from));
+    auto        source = std::string(fetch::byte_array::ToBase64(from));
     buf >> kind;
-
 
     if (kind == "DATA")
     {
@@ -86,10 +101,9 @@ void MuddleLearnerNetworkerImpl::Setup(MuddlePtr mud, StorePtr update_store)
 
     if (kind == "HELO")
     {
-      std::cout << "helo:" << source
-                << std::endl;
+      std::cout << "helo:" << source << std::endl;
       Lock lock(mutex_);
-      sources_.insert(source);
+      detected_peers_.insert(source);
       return;
     }
   });
@@ -180,9 +194,18 @@ void MuddleLearnerNetworkerImpl::PushUpdateBytes(const std::string &type_name, B
   auto random_factor = randomiser_.GetNew();
 
   serializers::MsgPackSerializer buf;
-  buf << std::string("DATA") << type_name << update << broadcast_proportion_ << random_factor;
 
-  mud_->GetEndpoint().Broadcast(SERVICE_DMLF, CHANNEL_COLEARN_BROADCAST, buf.data());
+  if (alg_)
+  {
+    // use the shuffler
+    auto next_ones = alg_ -> GetNextOutputs();
+    
+  }
+  else
+  {
+    buf << std::string("DATA") << type_name << update << broadcast_proportion_ << random_factor;
+    mud_->GetEndpoint().Broadcast(SERVICE_DMLF, CHANNEL_COLEARN_BROADCAST, buf.data());
+  }
 }
 
 MuddleLearnerNetworkerImpl::UpdatePtr MuddleLearnerNetworkerImpl::GetUpdate(

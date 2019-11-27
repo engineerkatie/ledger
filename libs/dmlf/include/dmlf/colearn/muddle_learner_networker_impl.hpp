@@ -63,9 +63,9 @@ public:
   using Uri                = fetch::network::Uri;
   using SubscriptionPtr    = fetch::muddle::MuddleEndpoint::SubscriptionPtr;
   using Peers              = std::unordered_set<Address>;
-  using Mutex = fetch::Mutex;
-  using Lock  = std::unique_lock<Mutex>;
-  using Sources = std::set<std::string>;
+  using Mutex              = fetch::Mutex;
+  using Lock               = std::unique_lock<Mutex>;
+  using Sources            = std::set<std::string>;
 
   static constexpr char const *LOGGING_NAME = "MuddleLearnerNetworkerImpl";
 
@@ -98,11 +98,6 @@ public:
     return update_store_->GetUpdateCount();
   }
 
-  std::size_t GetPeerCount() const override
-  {
-    return 0;
-  }
-
   virtual void submit(TaskP const &t);
 
   // This is the exposed interface
@@ -124,11 +119,30 @@ public:
   Address     GetAddress() const;
   std::string GetAddressAsString() const;
 
+  void SetShuffleAlgorithm(const std::shared_ptr<ShuffleAlgorithmInterface> &alg) override;
+
+  std::size_t GetPeerCount() const override
+  {
+    return supplied_peers_.size();
+  }
+
+  void AddPeers(const std::vector<std::string> &new_peers)
+  {
+    for (auto const &peer : new_peers)
+    {
+      supplied_peers_.insert(peer);
+    }
+  }
+  void ClearPeers()
+  {
+    supplied_peers_.clear();
+  }
 protected:
   friend class MuddleOutboundAnnounceTask;
   void     Setup(MuddlePtr mud, StorePtr update_store);
   uint64_t ProcessUpdate(const std::string &type_name, byte_array::ConstByteArray bytes,
                          double proportion, double random_factor, const std::string &source);
+
 private:
   std::shared_ptr<Taskpool>   taskpool_;
   std::shared_ptr<Threadpool> tasks_runners_;
@@ -144,7 +158,8 @@ private:
   byte_array::ConstByteArray  public_key_;
 
   std::shared_ptr<NetMan> netm_;
-  Sources sources_;
+  Sources                 detected_peers_;
+  Sources                 supplied_peers_;
 
   mutable Mutex mutex_;
 

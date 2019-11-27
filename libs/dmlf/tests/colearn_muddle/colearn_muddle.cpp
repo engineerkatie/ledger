@@ -28,6 +28,7 @@
 #include "math/tensor.hpp"
 #include "muddle/muddle_interface.hpp"
 #include "network/management/network_manager.hpp"
+#include "dmlf/stochastic_reception_algorithm.hpp"
 
 #include <chrono>
 #include <ostream>
@@ -82,7 +83,9 @@ public:
       r += std::to_string(remote);
     }
 
+    auto shuffle = std::make_shared<fetch::dmlf::StochasticReceptionAlgorithm>(1.0);
     actual    = std::make_shared<LN>(priv, port, r);
+    actual -> SetShuffleAlgorithm(shuffle);
     interface = actual;
     interface->RegisterUpdateType<UpdateTypeForTesting>("update");
     interface->RegisterUpdateType<fetch::dmlf::Update<std::string>>("vocab");
