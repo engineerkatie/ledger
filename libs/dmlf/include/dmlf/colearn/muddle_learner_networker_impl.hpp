@@ -75,6 +75,13 @@ public:
   using Uri                           = fetch::network::Uri;
   using deprecated_UpdateInterfacePtr = dmlf::deprecated_UpdateInterfacePtr;
 
+  using MessageHandlerFunc = void (fetch::dmlf::colearn::MuddleLearnerNetworkerImpl::*)(
+      const fetch::dmlf::colearn::MuddleLearnerNetworkerImpl::Address &, uint16_t, uint16_t,
+      uint16_t, serializers::MsgPackSerializer &,
+      const fetch::dmlf::colearn::MuddleLearnerNetworkerImpl::Address &);
+
+  using MessageHandlers = std::map<std::string, MessageHandlerFunc>;
+
   static constexpr char const *LOGGING_NAME = "MuddleLearnerNetworkerImpl";
 
   explicit MuddleLearnerNetworkerImpl(const std::string &priv, unsigned short int port,
@@ -134,9 +141,8 @@ public:
                                 byte_array::ConstByteArray bytes, double proportion = 1.0,
                                 double random_factor = 0.0);
 
-  void MessageHandler(Address const &from, uint16_t service, uint16_t channel,
-                      uint16_t counter, Payload const &payload,
-                      Address const &my_address);
+  void MessageHandler(Address const &from, uint16_t service, uint16_t channel, uint16_t counter,
+                      Payload const &payload, Address const &my_address);
 
   Randomiser &access_randomiser()
   {
@@ -176,12 +182,10 @@ protected:
   uint64_t ProcessUpdate(const std::string &type_name, byte_array::ConstByteArray bytes,
                          double proportion, double random_factor, const std::string &source);
 
-  void ProcessMessageHELO(Address const &from, uint16_t service, uint16_t channel,
-                      uint16_t counter, serializers::MsgPackSerializer const &payload,
-                      Address const &my_address);
-  void ProcessMessageUPDT(Address const &from, uint16_t service, uint16_t channel,
-                      uint16_t counter, serializers::MsgPackSerializer const &payload,
-                      Address const &my_address);
+  void ProcessMessageHELO(Address const &from, uint16_t service, uint16_t channel, uint16_t counter,
+                          serializers::MsgPackSerializer &buf, Address const &my_address);
+  void ProcessMessageUPDT(Address const &from, uint16_t service, uint16_t channel, uint16_t counter,
+                          serializers::MsgPackSerializer &buf, Address const &my_address);
 
 private:
   std::shared_ptr<Taskpool>   taskpool_;
@@ -196,6 +200,8 @@ private:
   double                      randomising_offset_;
   SubscriptionPtr             subscription_;
   byte_array::ConstByteArray  public_key_;
+
+  MessageHandlers message_handlers_;
 
   NetManPtr   netm_;
   Sources     detected_peers_;
