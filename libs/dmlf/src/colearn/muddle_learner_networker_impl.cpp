@@ -71,32 +71,54 @@ void MuddleLearnerNetworkerImpl::Setup(MuddlePtr mud, StorePtr update_store)
   subscription_->SetMessageHandler([this](Address const &from, uint16_t service, uint16_t channel,
                                           uint16_t counter, Payload const &payload,
                                           Address const &my_address) {
-    serializers::MsgPackSerializer buf{payload};
-
-    std::string                type_name;
-    byte_array::ConstByteArray bytes;
-    double                     proportion;
-    double                     random_factor;
-
-    auto source = std::string(fetch::byte_array::ToBase64(from));
-
-    buf >> type_name >> bytes >> proportion >> random_factor;
-    std::cout << "from:" << source << ", "
-              << "serv:" << service << ", "
-              << "chan:" << channel << ", "
-              << "cntr:" << counter << ", "
-              << "addr:" << fetch::byte_array::ToBase64(my_address) << ", "
-              << "type:" << type_name << ", "
-              << "size:" << bytes.size() << " bytes, "
-              << "prop:" << proportion << ", "
-              << "fact:" << random_factor << ", " << std::endl;
-    ;
-    ProcessUpdate(type_name, bytes, proportion, random_factor, source);
-  });
-
+                                     this -> MessageHandler(from, service, channel, counter, payload, my_address);
+                                   });
   randomising_offset_   = randomiser_.GetNew();
   broadcast_proportion_ = 1.0;  // a reasonable default.
 }
+
+void MuddleLearnerNetworkerImpl::MessageHandler(
+    Address const &from, uint16_t service, uint16_t channel,
+    uint16_t counter, Payload const &payload,
+    Address const &my_address)
+{
+  serializers::MsgPackSerializer buf{payload};
+
+  auto source = std::string(fetch::byte_array::ToBase64(from));
+
+  //std::string update_type;
+  //buf >> update_type;
+  ProcessMessageUPDT(from, service, channel, counter, buf, my_address);
+}
+
+void MuddleLearnerNetworkerImpl::ProcessMessageHELO(Address const &from, uint16_t service, uint16_t channel,
+                    uint16_t counter, serializers::MsgPackSerializer const &payload,
+                    Address const &my_address)
+{
+}
+
+void MuddleLearnerNetworkerImpl::ProcessMessageUPDT(Address const &from, uint16_t service, uint16_t channel,
+                    uint16_t counter, serializers::MsgPackSerializer const &payload,
+                    Address const &my_address)
+{
+  std::string                type_name;
+  byte_array::ConstByteArray bytes;
+  double                     proportion;
+  double                     random_factor;
+
+  buf >> type_name >> bytes >> proportion >> random_factor;
+  std::cout << "from:" << source << ", "
+            << "serv:" << service << ", "
+            << "chan:" << channel << ", "
+            << "cntr:" << counter << ", "
+            << "addr:" << fetch::byte_array::ToBase64(my_address) << ", "
+            << "type:" << type_name << ", "
+            << "size:" << bytes.size() << " bytes, "
+            << "prop:" << proportion << ", "
+            << "fact:" << random_factor << ", " << std::endl;
+  ProcessUpdate(type_name, bytes, proportion, random_factor, source);
+}
+
 
 MuddleLearnerNetworkerImpl::Address MuddleLearnerNetworkerImpl::GetAddress() const
 {

@@ -134,6 +134,10 @@ public:
                                 byte_array::ConstByteArray bytes, double proportion = 1.0,
                                 double random_factor = 0.0);
 
+  void MessageHandler(Address const &from, uint16_t service, uint16_t channel,
+                      uint16_t counter, Payload const &payload,
+                      Address const &my_address);
+
   Randomiser &access_randomiser()
   {
     return randomiser_;
@@ -171,6 +175,13 @@ protected:
   void     Setup(MuddlePtr mud, StorePtr update_store);
   uint64_t ProcessUpdate(const std::string &type_name, byte_array::ConstByteArray bytes,
                          double proportion, double random_factor, const std::string &source);
+
+  void ProcessMessageHELO(Address const &from, uint16_t service, uint16_t channel,
+                      uint16_t counter, serializers::MsgPackSerializer const &payload,
+                      Address const &my_address);
+  void ProcessMessageUPDT(Address const &from, uint16_t service, uint16_t channel,
+                      uint16_t counter, serializers::MsgPackSerializer const &payload,
+                      Address const &my_address);
 
 private:
   std::shared_ptr<Taskpool>   taskpool_;
