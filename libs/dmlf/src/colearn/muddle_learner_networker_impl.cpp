@@ -19,6 +19,7 @@
 #include "crypto/ecdsa.hpp"
 #include "dmlf/colearn/muddle_learner_networker_impl.hpp"
 #include "dmlf/colearn/muddle_outbound_update_task.hpp"
+#include "dmlf/colearn/muddle_outbound_announce_task.hpp"
 #include "dmlf/colearn/update_store.hpp"
 #include "dmlf/stochastic_reception_algorithm.hpp"
 #include "muddle/rpc/client.hpp"
@@ -78,6 +79,9 @@ void MuddleLearnerNetworkerImpl::Setup(MuddlePtr mud, StorePtr update_store)
 
   message_handlers_["HELO"] = &MuddleLearnerNetworkerImpl::ProcessMessageHELO;
   message_handlers_["UPDT"] = &MuddleLearnerNetworkerImpl::ProcessMessageUPDT;
+
+  announcer_ = std::make_shared<MuddleOutboundAnnounceTask>(mud_, *this, 1000, taskpool_);
+  taskpool_->after(announcer_, std::chrono::milliseconds(1000));
 }
 
 void MuddleLearnerNetworkerImpl::MessageHandler(Address const &from, uint16_t service,
@@ -93,19 +97,56 @@ void MuddleLearnerNetworkerImpl::MessageHandler(Address const &from, uint16_t se
   (this->*handler)(from, service, channel, counter, buf, my_address);
 }
 
-void MuddleLearnerNetworkerImpl::ProcessMessageHELO(Address const &  // from
-                                                    ,
+void MuddleLearnerNetworkerImpl::ProcessMessageHELO(Address const &from,
                                                     uint16_t  // service
                                                     ,
                                                     uint16_t  // channel
                                                     ,
                                                     uint16_t  // counter
                                                     ,
-                                                    serializers::MsgPackSerializer &  // buf
+                                                    serializers::MsgPackSerializer &buf
                                                     ,
                                                     Address const &  // my_address
 )
-{}
+{
+  WaypointNameValues waypoint_name_values;
+  buf >> waypoint_name_values;
+  auto detected_peer = std::string(fetch::byte_array::ToBase64(from));
+
+  Lock lock(mutex_);
+  for(auto const &nv : waypoint_name_values)
+  {
+    auto waypoint_name = nv.first;
+    auto waypoint_value = nv.second;
+    FETCH_LOG_WARN(LOGGING_NAME, fetch::byte_array::ToBase64(mud_->GetAddress()),
+                   " waypointer=", detected_peer,
+                   " waypoint=", waypoint_name,
+                   " waypoint_value=", waypoint_value
+                   );
+    network_waypoints_[waypoint_name][detected_peer] = waypoint_value;
+  }
+}
+
+void MuddleLearnerNetworkerImpl::ReachedWaypoint(const std::string &waypoint_name)
+{
+  Lock lock(mutex_);
+  my_waypoints_[waypoint_name] = true;
+}
+
+std::size_t MuddleLearnerNetworkerImpl::CountPeersReachedWaypoint(const std::string &waypoint_name)
+{
+  Lock lock(mutex_);
+  std::size_t count = 0;
+  for(auto const &pv : network_waypoints_[waypoint_name])
+  {
+    if (pv.second)
+    {
+      count +=1;
+    }
+  }
+  return count;
+}
+
 
 void MuddleLearnerNetworkerImpl::ProcessMessageUPDT(Address const &from, uint16_t service,
                                                     uint16_t channel, uint16_t counter,
@@ -182,11 +223,6 @@ MuddleLearnerNetworkerImpl::~MuddleLearnerNetworkerImpl()
   taskpool_->stop();
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
   tasks_runners_->stop();
-}
-
-void MuddleLearnerNetworkerImpl::submit(TaskPtr const &t)
-{
-  taskpool_->submit(t);
 }
 
 void MuddleLearnerNetworkerImpl::PushUpdateBytes(UpdateType const &type_name, Bytes const &update,

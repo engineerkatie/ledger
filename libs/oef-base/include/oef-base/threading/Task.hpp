@@ -97,6 +97,7 @@ public:
     return task_state_.load();
   }
 
+protected:
 private:
   std::shared_ptr<Taskpool> pool_;
   std::atomic<TaskState>    task_state_;

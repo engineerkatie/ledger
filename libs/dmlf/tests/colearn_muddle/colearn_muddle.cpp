@@ -92,6 +92,8 @@ public:
     interface_typed = std::make_shared<LNBaseT>(interface);
     interface_typed->RegisterUpdateType<UpdateTypeForTesting>("update");
     interface_typed->RegisterUpdateType<fetch::dmlf::deprecated_Update<std::string>>("vocab");
+
+    actual -> ReachedWaypoint();
   }
 
   void PretendToLearn()
@@ -139,6 +141,8 @@ public:
     }
   }
 };
+
+  /*
 
 TEST_F(MuddleTypedUpdatesTests, correctMessagesArriveBCast)
 {
@@ -211,6 +215,21 @@ TEST_F(MuddleTypedUpdatesTests, correctMessagesArriveShuffle)
   EXPECT_EQ(instances[3].instance->actual->GetUpdateCount(), 1);
   EXPECT_EQ(instances[4].instance->actual->GetUpdateCount(), 1);
   EXPECT_EQ(instances[5].instance->actual->GetUpdateCount(), 0);
+}
+  */
+
+TEST_F(MuddleTypedUpdatesTests, peersDetected)
+{
+  CreateServers(6);
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+
+  EXPECT_EQ(instances[0].instance->actual->CountPeersReachedWaypoint(), 5);
+  EXPECT_EQ(instances[1].instance->actual->CountPeersReachedWaypoint(), 5);
+  EXPECT_EQ(instances[2].instance->actual->CountPeersReachedWaypoint(), 5);
+  EXPECT_EQ(instances[3].instance->actual->CountPeersReachedWaypoint(), 5);
+  EXPECT_EQ(instances[4].instance->actual->CountPeersReachedWaypoint(), 5);
+  EXPECT_EQ(instances[5].instance->actual->CountPeersReachedWaypoint(), 5);
 }
 
 }  // namespace

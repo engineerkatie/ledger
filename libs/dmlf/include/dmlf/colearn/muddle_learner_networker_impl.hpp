@@ -37,6 +37,8 @@ namespace fetch {
 namespace dmlf {
 namespace colearn {
 
+class MuddleOutboundAnnounceTask;
+
 class MuddleLearnerNetworkerImpl : public AbstractMessageController
 {
 public:
@@ -81,6 +83,13 @@ public:
       const fetch::dmlf::colearn::MuddleLearnerNetworkerImpl::Address &);
 
   using MessageHandlers = std::map<std::string, MessageHandlerFunc>;
+
+  using WaypointName  = std::string;
+  using WaypointValue = bool;
+  using WaypointPeer  = std::string;
+
+  using WaypointNameValues     = std::map<WaypointName, WaypointValue>;
+  using WaypointNamePeerValues = std::map<WaypointName, std::map<WaypointPeer,WaypointValue>>;
 
   static constexpr char const *LOGGING_NAME = "MuddleLearnerNetworkerImpl";
 
@@ -133,8 +142,6 @@ public:
   ConstUpdatePtr GetUpdate(AlgorithmClass const &algo, UpdateType const &type,
                            Criteria const &criteria);
 
-  virtual void submit(TaskPtr const &t);
-
   // This is the exposed interface
 
   uint64_t NetworkColearnUpdate(service::CallContext const &context, const std::string &type_name,
@@ -176,6 +183,8 @@ public:
     supplied_peers_.clear();
   }
 
+  void ReachedWaypoint(const std::string &waypoint_name="ready");
+  std::size_t CountPeersReachedWaypoint(const std::string &waypoint_name="ready");
 protected:
   friend class MuddleOutboundAnnounceTask;
   void     Setup(MuddlePtr mud, StorePtr update_store);
@@ -209,9 +218,15 @@ private:
 
   mutable Mutex mutex_;
 
+  WaypointNamePeerValues network_waypoints_;
+  WaypointNameValues     my_waypoints_;
+
   std::shared_ptr<ShuffleAlgorithmInterface> alg_;
 
   friend class MuddleMessageHandler;
+  friend class MuddleOutboundAnnounceTask;
+
+  std::shared_ptr<MuddleOutboundAnnounceTask> announcer_;
 };
 
 }  // namespace colearn
